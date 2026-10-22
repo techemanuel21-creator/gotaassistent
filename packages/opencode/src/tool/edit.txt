@@ -1,0 +1,6 @@
+Replaces exact text in a file.
+
+- Read the file first in this conversation, or the edit fails.
+- Keep the exact indentation shown after the line-number prefix of Read output (`1: `); never include the prefix in oldString/newString.
+- Prefer editing existing files; no emojis unless asked.
+- It fails if oldString is not found, or is found more than once: add surrounding lines to make it unique, or use `replaceAll` (e.g. to rename a variable across the file).

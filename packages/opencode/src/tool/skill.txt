@@ -1,0 +1,1 @@
+Load a skill listed in the system prompt when the task matches it; its instructions and resources (scripts, files in the skill folder) are added to the conversation. The name must match a listed skill.

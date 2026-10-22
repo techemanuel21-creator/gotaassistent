@@ -1,0 +1,5 @@
+Ask the user a question during execution to gather preferences, clarify instructions or decide between options.
+
+- A "Type your own answer" option is added automatically (`custom`, default): do not add "Other".
+- Answers are arrays of labels; `multiple: true` allows several.
+- Put your recommended option first and end its label with "(Recommended)".

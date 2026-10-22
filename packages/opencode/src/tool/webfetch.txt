@@ -1,0 +1,1 @@
+Fetches a URL (fully formed; HTTP is upgraded to HTTPS) and returns it as "markdown" (default), "text" or "html". Read-only; very large content may be summarized. Prefer a more specific tool if one is available.

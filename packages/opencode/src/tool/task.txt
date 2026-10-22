@@ -1,0 +1,8 @@
+Launch a sub-agent for complex multi-step or open-ended search work. Set subagent_type to pick the agent.
+
+Do NOT use it to read a known file (Read/Glob), find a definition like "class Foo" (Grep), or search 2-3 files (Read), nor when no agent fits.
+
+- Launch independent agents concurrently (one message, several tool uses). Do not repeat work you delegated; continue with other work or wait for the result.
+- The agent returns one final message, not visible to the user: summarize it for them. Reuse the returned task_id to continue the same sub-agent session.
+- Each new agent starts without context: give a detailed prompt, say whether it should write code or only research, what to return, and how to verify (e.g. test commands). Trust its output.
+- If an agent's description says to use it proactively, do so.

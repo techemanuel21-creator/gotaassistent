@@ -1,0 +1,4 @@
+Writes a file (overwrites if it exists).
+
+- To overwrite an existing file, Read it first in this conversation or the write fails.
+- Prefer editing existing files; do not create new files, documentation or README unless asked; no emojis unless asked.

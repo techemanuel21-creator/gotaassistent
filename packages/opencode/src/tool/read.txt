@@ -1,0 +1,6 @@
+Read a file or directory (absolute filePath). Errors if it does not exist.
+
+- Returns up to 2000 lines from `offset` (1-indexed), each as `<line>: <content>`; lines over 2000 characters are truncated. Directories list one entry per line, `/` after subdirectories.
+- For later sections call again with a larger offset; read larger windows instead of many tiny slices. Read several files in parallel.
+- Use Grep for specific content in large files and Glob to find unknown paths.
+- Reads images and PDFs as attachments.

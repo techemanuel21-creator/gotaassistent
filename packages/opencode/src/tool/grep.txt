@@ -1,0 +1,1 @@
+Searches file contents with a regular expression (e.g. "log.*Error", "function\s+\w+"); `include` filters files (e.g. "*.{ts,tsx}"). Returns file paths and line numbers with the matching lines. To count matches use `rg` in the shell. For open-ended multi-round searches use Task.

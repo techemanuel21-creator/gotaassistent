@@ -1,0 +1,7 @@
+Create and update a structured task list for the current session, shown to the user.
+
+Use it proactively for work with 3+ distinct steps, non-trivial work, several user tasks, or when asked; skip it for a single simple task, purely informational requests, or trivial steps.
+
+States: `pending`, `in_progress` (exactly ONE at a time while work remains), `completed`, `cancelled`.
+- Update in real time; mark `completed` only after the work AND its verification are done. If blocked, keep `in_progress` and add a todo for the blocker.
+- Items are specific and actionable; keep user-provided commands verbatim; add follow-ups as you find them.

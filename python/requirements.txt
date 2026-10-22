@@ -1,0 +1,10 @@
+pillow
+numpy
+pyttsx3
+piper-tts
+sounddevice
+vosk
+faster-whisper
+praat-parselmouth
+msal
+playwright

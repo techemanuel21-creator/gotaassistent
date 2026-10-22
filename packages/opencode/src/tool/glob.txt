@@ -1,0 +1,1 @@
+Finds files by glob pattern (e.g. "**/*.js", "src/**/*.ts"); returns paths. For open-ended multi-round searches use Task. Run several speculative searches in one batch.
