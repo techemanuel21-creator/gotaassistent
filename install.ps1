@@ -18,11 +18,23 @@ function Step($text) { Write-Host "-- $text" -ForegroundColor Yellow }
 
 # 1. ferramentas: Bun (compila e roda o app) e Python 3.12 (voz, telas, WhatsApp, Outlook)
 Update-Path
+# tudo vem deste repositorio: o Bun e o instalador do Python ficam na release "tools-1" (a copia oficial, conferida pelo SHA-256)
+$toolsUrl = "https://github.com/$repo/releases/download/tools-1"
+function Get-Tool($name, $sha256, $to) {
+    Invoke-WebRequest "$toolsUrl/$name" -OutFile $to -UseBasicParsing
+    if ((Get-FileHash $to -Algorithm SHA256).Hash -ne $sha256) { Remove-Item $to -Force; throw "O arquivo $name baixado nao confere (SHA-256)." }
+}
+$bunDir = Join-Path $root 'tools\bun'
+if (Test-Path (Join-Path $bunDir 'bun.exe')) { $env:Path = "$bunDir;$env:Path" }
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
-    Step 'Instalando o Bun (só para o seu usuário)...'
-    winget install --id Oven-sh.Bun -e --scope user --accept-source-agreements --accept-package-agreements
-    Update-Path
-    if (-not (Get-Command bun -ErrorAction SilentlyContinue)) { throw 'Nao consegui instalar o Bun. Instale em bun.sh e rode este comando de novo.' }
+    Step 'Baixando o Bun...'
+    New-Item -ItemType Directory -Force $bunDir | Out-Null
+    $zip = Join-Path $env:TEMP 'gota-bun.zip'
+    Get-Tool 'bun-windows-x64.zip' 'CBD0A6BFC4B67CB5F64C67D74290B2483438CF8A7098C46EBE21FC95E792386A' $zip
+    Expand-Archive $zip -DestinationPath $bunDir -Force
+    Remove-Item $zip -Force
+    $env:Path = "$bunDir;$env:Path"
+    if (-not (Get-Command bun -ErrorAction SilentlyContinue)) { throw 'Nao consegui preparar o Bun.' }
 }
 function Find-Python {
     foreach ($c in @(@('py', '-3.12'), @('python'))) {
@@ -36,9 +48,13 @@ function Find-Python {
 }
 $py = Find-Python
 if (-not $py) {
-    Step 'Instalando o Python 3.12 (só para o seu usuário)...'
-    winget install --id Python.Python.3.12 -e --scope user --accept-source-agreements --accept-package-agreements
+    Step 'Baixando e instalando o Python 3.12 (só para o seu usuário)...'
+    $setup = Join-Path $env:TEMP 'gota-python-setup.exe'
+    Get-Tool 'python-3.12.10-amd64.exe' '67B5635E80EA51072B87941312D00EC8927C4DB9BA18938F7AD2D27B328B95FB' $setup
+    Start-Process $setup -ArgumentList '/quiet', 'InstallAllUsers=0', 'PrependPath=1', 'Include_launcher=1', 'Include_test=0', 'Include_doc=0' -Wait
+    Remove-Item $setup -Force -ErrorAction SilentlyContinue
     Update-Path
+    $env:Path = "$bunDir;$env:Path"
     $py = Find-Python
     if (-not $py) { throw 'Nao consegui instalar o Python 3.12. Instale em python.org e rode este comando de novo.' }
 }
@@ -76,7 +92,6 @@ Push-Location $app
 try {
     # 3. bibliotecas do app (a primeira vez demora uns 10 minutos; depois só o que mudou)
     Step 'Instalando as bibliotecas do app (a primeira vez demora)...'
-    git config core.autocrlf false 2>$null
     Get-ChildItem patches -File -ErrorAction SilentlyContinue | ForEach-Object {   # os patches precisam de quebra de linha LF
         $t = [IO.File]::ReadAllText($_.FullName)
         if ($t.Contains("`r`n")) { [IO.File]::WriteAllText($_.FullName, $t.Replace("`r`n", "`n"), (New-Object Text.UTF8Encoding($false))) }
