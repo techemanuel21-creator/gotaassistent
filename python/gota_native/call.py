@@ -112,7 +112,7 @@ class Call:
         if self.injected:
             return self.injected.pop(0)
         n.listener.cancel.clear()
-        heard = n.listener.listen(on_partial=lambda t: n.emit({"type": "call", "state": "listening", "partial": t}), silence=1.0, timeout=10.0,
+        heard = n.listener.listen(on_partial=lambda t: n.emit({"type": "call", "state": "listening", "partial": t}), silence=1.6, timeout=10.0,
                                   on_level=lambda p: None)
         if heard and _similar(heard, self.recent[-600:]):   # its own voice coming back through the speakers
             return ""

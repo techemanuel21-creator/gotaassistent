@@ -154,14 +154,14 @@ export function GotaSidebar(): JSX.Element {
             icon="history"
             label={t("gota.nav.calls")}
             onClick={() => {
-              const records = sessions.data.searchRecords()
-              const calls = records
-                .filter((record) => automatedSessions()[record.session.id] === "call")
-                .map((record) => ({ id: record.session.id, title: record.session.title, time: record.session.time.updated ?? record.session.time.created }))
+              const all = sessions.data.allSessions()
+              const calls = all
+                .filter((session) => automatedSessions()[session.id] === "call")
+                .map((session) => ({ id: session.id, title: session.title, time: session.time.updated ?? session.time.created }))
                 .sort((a, b) => b.time - a.time)
               openCalls(dialog, calls, (id) => {
-                const record = records.find((item) => item.session.id === id)
-                if (record) sessions.session.open(record.session)
+                const session = all.find((item) => item.id === id)
+                if (session) sessions.session.open(session)
               })
             }}
           />

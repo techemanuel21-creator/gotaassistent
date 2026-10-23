@@ -582,7 +582,7 @@ class Listener:
                     "se preferir, escolha o certo em Microfone, no menu lateral, ou confira o volume em Configurações > Sistema > Som.")
         return f"Captei som em \"{self.device_name}\" mas não entendi nenhuma palavra. Fale um pouco mais perto e devagar."
 
-    WHISPER_SIZE = "base"      # ~0.9 s per sentence on this CPU (small took 3-4 s); small is still used while base is not downloaded
+    WHISPER_SIZE = "small"     # far fewer wrong words than base (~3 s per sentence on a laptop CPU); base is still used while small is not on the computer
     VOCAB = "Gota, Veeam, Windows, Linux, tela, cibersegurança, infraestrutura, backup, servidor, PowerShell, firewall, Active Directory."
 
     whisper_downloading = False
@@ -590,7 +590,7 @@ class Listener:
     def _whisper_dir(self):
         """Folder of the downloaded Whisper model, or None while it is not on this computer yet."""
         root = MODELS / "whisper"
-        for size in (self.WHISPER_SIZE, "small"):
+        for size in (self.WHISPER_SIZE, "base"):
             for d in root.glob(f"models--*whisper-{size}*/snapshots/*"):
                 if (d / "model.bin").exists():
                     return d
@@ -638,7 +638,7 @@ class Listener:
             return fallback
         try:
             x = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
-            segs, _ = self.whisper().transcribe(x, language="pt", beam_size=1, vad_filter=True, initial_prompt=self.VOCAB, condition_on_previous_text=False)
+            segs, _ = self.whisper().transcribe(x, language="pt", beam_size=3, vad_filter=True, initial_prompt=self.VOCAB, condition_on_previous_text=False, without_timestamps=True)
             text = " ".join(s.text.strip() for s in segs).strip()
             if text and not text.lower().startswith(self.VOCAB[:12].lower()):
                 return text
@@ -663,6 +663,7 @@ class Listener:
         q = queue.Queue()
         started, last_voice, heard = time.time(), None, ""
         buf = bytearray()
+        closed = []   # sentences Vosk has already closed: a short breath inside a sentence must not end it
         with self._stream(q):
             while not self.cancel.is_set():
                 try:
@@ -673,20 +674,24 @@ class Listener:
                 if data:
                     on_level(self.peak)
                     buf += data
-                if data and rec.AcceptWaveform(data):
-                    text = json.loads(rec.Result()).get("text", "")
-                    if text:
-                        return self.refine(bytes(buf), text)
-                elif data:
-                    part = json.loads(rec.PartialResult()).get("partial", "")
-                    if part:
-                        heard, last_voice = part, now
-                        on_partial(part)
+                    if rec.AcceptWaveform(data):
+                        text = json.loads(rec.Result()).get("text", "")
+                        if text:
+                            closed.append(text)
+                            heard, last_voice = "", now
+                            on_partial(" ".join(closed))
+                    else:
+                        part = json.loads(rec.PartialResult()).get("partial", "")
+                        if part:
+                            heard, last_voice = part, now
+                            on_partial(" ".join(closed + [part]))
                 if last_voice is None and now - started > timeout:
                     self._note_level()
                     return ""
+                # the sentence ends only after a real silence (`silence` seconds with no new words), never at the first pause
                 if last_voice is not None and now - last_voice > silence or now - started > max_seconds:
-                    return self.refine(bytes(buf), json.loads(rec.FinalResult()).get("text", "") or heard)
+                    tail = json.loads(rec.FinalResult()).get("text", "") or heard
+                    return self.refine(bytes(buf), " ".join(closed + ([tail] if tail else [])).strip())
         return ""
 
     def wait_for_wake_word(self, stop: threading.Event):

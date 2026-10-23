@@ -222,6 +222,13 @@ def handle(msg):
         try:
             return reply(id_, {"content": [{"type": "text", "text": _text(TOOLS[name][0](**args))}]})
         except Exception as e:
+            try:   # a record of what failed, for finding the cause afterwards (%APPDATA%\Gota\mcp_errors.log)
+                import time
+                from gota import store
+                with open(store.ROOT / "mcp_errors.log", "a", encoding="utf-8") as log:
+                    log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {name}({args}): {e}\n{traceback.format_exc(limit=4)}\n")
+            except Exception:
+                pass
             return reply(id_, {"content": [{"type": "text", "text": f"Erro: {e}\n{traceback.format_exc(limit=2)}"}], "isError": True})
     if method == "ping":
         return reply(id_, {})

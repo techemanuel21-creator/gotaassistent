@@ -6,8 +6,53 @@ import ctypes, shutil, struct, time
 from pathlib import Path
 from .store import ROOT
 
+import functools, msvcrt, subprocess
+
 PROFILE = ROOT / "whatsapp"
 URL = "https://web.whatsapp.com/"
+
+
+class _OneAtATime:
+    """Only one task drives the WhatsApp browser at a time, across processes (the window, the call, the chat): two Edge windows on the same profile make each other fail."""
+
+    def __enter__(self):
+        PROFILE.parent.mkdir(parents=True, exist_ok=True)
+        self.file = open(PROFILE.parent / "whatsapp.lock", "w")
+        end = time.time() + 150
+        while True:
+            try:
+                msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, 1)
+                return self
+            except OSError:
+                if time.time() > end:
+                    self.file.close()
+                    raise RuntimeError("O WhatsApp está ocupado com outra tarefa; tente de novo em instantes.")
+                time.sleep(0.5)
+
+    def __exit__(self, *exc):
+        try:
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_UNLCK, 1)
+        finally:
+            self.file.close()
+
+
+def _serialized(fn):
+    @functools.wraps(fn)
+    def run(*args, **kwargs):
+        with _OneAtATime():
+            return fn(*args, **kwargs)
+    return run
+
+
+def _free_profile():
+    """Closes a left-over Edge that still holds the WhatsApp profile (a task that was cut short): it would make the next launch fail."""
+    try:
+        ps = ("Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -like ('*' + $env:GOTA_WA_PROFILE + '*') } "
+              "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }")
+        subprocess.run(["powershell", "-NoProfile", "-Command", ps], env=dict(__import__("os").environ, GOTA_WA_PROFILE=str(PROFILE)), timeout=20,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), capture_output=True)
+    except Exception:
+        pass
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0"
 
 
@@ -94,10 +139,15 @@ class WhatsApp:
                     args=["--disable-blink-features=AutomationControlled"], ignore_default_args=["--enable-automation"])
         if headless:
             opts["user_agent"] = UA  # WhatsApp Web refuses browsers that call themselves "Headless"
-        try:
-            return pw.chromium.launch_persistent_context(**opts)
-        except Exception as e:
-            raise RuntimeError("Não consegui abrir o Microsoft Edge (ele precisa estar instalado e fechado se usar o mesmo perfil): " + str(e)[:150])
+        last = None
+        for attempt in range(2):
+            try:
+                return pw.chromium.launch_persistent_context(**opts)
+            except Exception as e:
+                last = e
+                if attempt == 0:
+                    _free_profile()   # a left-over Edge on this profile is the usual reason: close it and try once more
+        raise RuntimeError("Não consegui abrir o Microsoft Edge (ele precisa estar instalado): " + str(last)[:150])
 
     @staticmethod
     def _state(page, timeout):
@@ -115,6 +165,7 @@ class WhatsApp:
         return "qr" if seen_qr else "unknown"
 
     # ------------------------------------------------------------------ connect / disconnect
+    @_serialized
     def connect(self, on_status=lambda s: None, wait=240):
         """Opens WhatsApp Web in a visible window; the user scans the QR code. Returns True when the chat list shows up."""
         from playwright.sync_api import sync_playwright
@@ -245,6 +296,7 @@ class WhatsApp:
     }
     """
 
+    @_serialized
     def unread(self, on_status=lambda s: None):
         """What the connected WhatsApp Web shows as unread: {"total": chats, "chats": [{title, count}], "via": "filtro"|"lista"}.
         The "Não lidas" chip's own number is the reference for how many chats; the list gives who and how many messages each."""
@@ -301,6 +353,7 @@ class WhatsApp:
             finally:
                 ctx.close()
 
+    @_serialized
     def send(self, contact, message="", image=None, confirm=lambda found: True, on_status=lambda s: None, dry_run=False, names=()):
         """Finds `contact` by name, asks confirm(found_name), then sends the picture and/or the text. Returns the contact's name as WhatsApp shows it.
         dry_run does everything except the final send (and cleans up): used to check that the page still looks the way this code expects."""

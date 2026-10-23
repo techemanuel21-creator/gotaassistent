@@ -172,6 +172,7 @@ export function createHomeSessionsController(home: HomeController) {
       groups,
       loading: () => sessionLoad.isLoading,
       searchRecords: allRecords,
+      allSessions: indexedSessions, // every session of the engine, whatever its folder (the voice calls are not inside a project)
     },
     session: {
       showProjectName: () => !home.project.selected(),

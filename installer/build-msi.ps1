@@ -83,10 +83,10 @@ foreach ($m in 'piper', 'vosk-pt') {
     if (-not (Test-Path $src)) { throw "Falta o modelo de voz: $src (abra o Gota e faca uma ligacao uma vez para baixa-lo)" }
     Copy-Item $src (Join-Path $models $m) -Recurse
 }
-$wh = Join-Path $repo 'models\whisper\models--Systran--faster-whisper-base'
-if (-not (Test-Path $wh)) { throw "Falta o modelo Whisper base: $wh" }
+$wh = Join-Path $repo 'models\whisper\models--Systran--faster-whisper-small'
+if (-not (Test-Path $wh)) { throw "Falta o modelo Whisper small: $wh" }
 New-Item -ItemType Directory -Force (Join-Path $models 'whisper') | Out-Null
-Copy-Item $wh (Join-Path $models 'whisper\models--Systran--faster-whisper-base') -Recurse
+Copy-Item $wh (Join-Path $models 'whisper\models--Systran--faster-whisper-small') -Recurse
 
 # 5. electron-builder -> MSI (por usuario). Usa o Electron que ja esta em node_modules (sem baixar outro).
 Step 'Gerando o MSI'
