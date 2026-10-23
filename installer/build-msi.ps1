@@ -2,7 +2,7 @@
 # Dentro dele vai TUDO: o app (com o motor), o Electron, o Python 3.12 com as bibliotecas, os modelos de voz (Vosk, Whisper base, Piper) e a configuracao.
 # Uso:  powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1     ->  installer\dist\GotaAssistent-<versao>.msi
 # Precisa de internet so para MONTAR (Python, bibliotecas, ferramentas do MSI); o MSI pronto instala sem rede.
-param([string]$Version = '1.0.0', [switch]$SkipBuild)
+param([string]$Version = '1.0.0', [switch]$SkipBuild, [ValidateSet('zip', 'msi')][string]$Format = 'zip')
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -34,6 +34,7 @@ New-Item -ItemType Directory -Force $app | Out-Null
 Step 'Preparando o app'
 Copy-Item (Join-Path $repo 'packages\desktop\out') (Join-Path $app 'out') -Recurse
 Copy-Item (Join-Path $repo 'packages\desktop\icons\dev') (Join-Path $app 'resources\icons') -Recurse
+Copy-Item (Join-Path $repo 'packages\desktop\src\overlay') (Join-Path $app 'src\overlay') -Recurse   # o popup do Ctrl+Alt+L/G (a janela do gato)
 $deskPkg = Get-Content (Join-Path $repo 'packages\desktop\package.json') -Raw | ConvertFrom-Json
 $rootPkg = Get-Content (Join-Path $repo 'package.json') -Raw | ConvertFrom-Json
 $deps = [ordered]@{}
@@ -44,7 +45,7 @@ foreach ($p in $deskPkg.dependencies.PSObject.Properties) {
 }
 $nodePty = '@lydell/node-pty-win32-x64'
 $deps[$nodePty] = $rootPkg.workspaces.catalog.'@lydell/node-pty'
-$pkg = [ordered]@{ name = 'gotaassistent'; productName = 'GotaAssistent'; version = $Version; description = 'GotaAssistent'; author = 'GotaAssistent'; main = './out/main/index.js'; dependencies = $deps }
+$pkg = [ordered]@{ name = 'gotaassistent'; productName = 'GotaAssistent'; version = $Version; description = 'GotaAssistent'; author = 'GotaAssistent'; type = 'module'; main = './out/main/index.js'; dependencies = $deps }
 $noBom = New-Object Text.UTF8Encoding($false)
 [IO.File]::WriteAllText((Join-Path $app 'package.json'), ($pkg | ConvertTo-Json -Depth 5), $noBom)   # sem BOM: o electron-builder nao le JSON com BOM
 Push-Location $app
@@ -101,22 +102,34 @@ module.exports = {
   npmRebuild: false,
   asar: true,
   asarUnpack: ['**/*.node', '**/node-pty*/**'],
-  files: ['out/**/*', 'package.json', 'node_modules/**/*', '!node_modules/**/{test,tests,__tests__,*.md,*.map}'],
-  extraResources: [{ from: 'resources/icons', to: 'icons' }],
+  files: ['out/**/*', 'src/overlay/**/*', 'resources/icons/**/*', 'package.json', 'node_modules/**/*', '!node_modules/**/{test,tests,__tests__,*.md,*.map}'],
+  extraResources: [
+    { from: 'resources/icons', to: 'icons' },
+    { from: String.raw``$(Join-Path $repo 'packages\ui\src\assets\gota-cat')``, to: 'ui/src/assets/gota-cat' },
+  ],
   extraFiles: [
     { from: String.raw``$py``, to: 'python' },
     { from: String.raw``$(Join-Path $extra 'config')``, to: 'config' },
     { from: String.raw``$models``, to: 'models' },
   ],
   protocols: { name: 'GotaAssistent', schemes: ['opencode'] },
-  win: { icon: 'resources/icons/icon.ico', target: ['msi'], signAndEditExecutable: true },
+  win: { icon: 'resources/icons/icon.ico', target: ['$(if ($Format -eq 'msi') { 'msi' } else { 'dir' })'], signAndEditExecutable: true },
   msi: { oneClick: true, perMachine: false, createDesktopShortcut: true, createStartMenuShortcut: true, runAfterFinish: true, shortcutName: 'GotaAssistent' },
 }
 "@
 [IO.File]::WriteAllText((Join-Path $app 'electron-builder.config.cjs'), $cfg, $noBom)
 Push-Location $app
 $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
-& bun --bun (Join-Path $repo 'packages\desktop\node_modules\electron-builder\cli.js') --win msi --config electron-builder.config.cjs --publish never
+& bun --bun (Join-Path $repo 'packages\desktop\node_modules\electron-builder\cli.js') --win $(if ($Format -eq 'msi') { 'msi' } else { 'dir' }) --config electron-builder.config.cjs --publish never
 if ($LASTEXITCODE -ne 0) { throw 'electron-builder falhou' }
 Pop-Location
-Get-ChildItem $dist -Filter *.msi | ForEach-Object { Write-Host ("MSI pronto: {0} ({1:N0} MB)" -f $_.FullName, ($_.Length / 1MB)) -ForegroundColor Green }
+if ($Format -eq 'msi') {
+    Get-ChildItem $dist -Filter *.msi | ForEach-Object { Write-Host ("MSI pronto: {0} ({1:N0} MB)" -f $_.FullName, ($_.Length / 1MB)) -ForegroundColor Green }
+} else {
+    # zip portatil: GotaAssistent.exe fica na RAIZ da pasta do Gota, junto de python, models e config; os dados do programa vao para a pasta "data" dela
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zipFile = Join-Path $dist "GotaAssistent-$Version.zip"
+    Remove-Item $zipFile -ErrorAction SilentlyContinue
+    [IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $dist 'win-unpacked'), $zipFile, [IO.Compression.CompressionLevel]::Optimal, $false)
+    Write-Host ("ZIP pronto: {0} ({1:N0} MB)" -f $zipFile, ((Get-Item $zipFile).Length / 1MB)) -ForegroundColor Green
+}

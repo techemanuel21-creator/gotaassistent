@@ -82,6 +82,10 @@ if __name__ == "__main__":
             f'<image width="128" height="128" xlink:href="data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"/></svg>\n', "utf-8")
     emblem(192).save(out / "web-app-manifest-192x192.png")
     emblem(512).save(out / "web-app-manifest-512x512.png")
+    public = ROOT / "packages" / "app" / "public"   # what the window serves (favicon, notification icon)
+    for name in ("favicon-96x96.png", "favicon-96x96-v3.png", "apple-touch-icon.png", "apple-touch-icon-v3.png", "favicon.ico", "favicon-v3.ico", "favicon.svg", "favicon-v3.svg",
+                 "web-app-manifest-192x192.png", "web-app-manifest-512x512.png"):
+        (public / name).write_bytes((out / name).read_bytes())
     for channel in ("dev", "beta", "prod"):
         d = ROOT / "packages" / "desktop" / "icons" / channel
         d.mkdir(parents=True, exist_ok=True)

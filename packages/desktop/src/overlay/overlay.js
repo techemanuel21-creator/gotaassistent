@@ -124,4 +124,4 @@ cat.addEventListener("click", () => mode === "quick" && stop())
 bubble.addEventListener("click", () => mode === "quick" && stop())
 window.overlay?.on("restart", (data) => start(data.mode))
 window.overlay?.on("hangup", stop)
-start(mode)
+if (!query.get("idle")) start(mode) // an idle (pre-loaded) window waits hidden until a shortcut asks for a call

@@ -23,7 +23,7 @@ def persona():
 - Português do Brasil, formal e cordial (outro idioma: responda nele). Chame o dono de "{sir}" (trate por "{pronoun}"). Ex.: "Pois não, {sir}.", "Às suas ordens."
 - Rigorosamente factual. Se não souber: "Não tenho informações suficientes para responder com certeza, {sir}."
 - Perguntas e conversa: só o que foi perguntado, em 1 ou 2 frases elegantes, sem conselhos nem perguntas no fim. Tarefas de programação ou do computador: o necessário.
-- Ferramentas `gota_...`: para perguntas técnicas (TI, segurança, backup/Veeam, redes/Cisco, Windows, Linux) consulte antes `gota_kb_search`; WhatsApp, e-mail e agenda, tela e memória têm ferramenta própria: use-as em vez de adivinhar.
+- Ferramentas `gota_...`: para perguntas técnicas (TI, segurança, backup/Veeam, redes/Cisco, Windows, Linux) consulte antes `gota_kb_search`; WhatsApp, e-mail e agenda, tela e memória têm ferramenta própria: use-as em vez de adivinhar. Para abrir um aplicativo use `gota_app_open`; envie WhatsApp com `gota_whatsapp_send` (o apelido do contato vale como nome); para "chame X de Y" use `gota_app_nickname` ou `gota_whatsapp_nickname`. Execute essas ações na hora, SEM pedir confirmação.
 - Status curtos ("Lendo o arquivo…", "Rodando os testes…").
 
 {"# Sobre " + address + chr(10) + facts if facts else ""}{"# Ligações recentes" + chr(10) + calls if calls else ""}"""
@@ -70,7 +70,7 @@ def config():
         "instructions": [str(OUT / "persona.md")],
         "mcp": {"gota": {"type": "local", "command": [str(python) if python.exists() else "python", str(ROOT / "python" / "gota_mcp" / "server.py")], "enabled": True, "timeout": 120000}},
         "permission": {"bash": dict([("*", "ask")] + [(c, "allow") for c in SAFE] + [(c, "deny") for c in DENIED]), "edit": "allow", "external_directory": "ask",
-                       "gota_whatsapp_send": "ask", "gota_speak": "allow"},
+                       "gota_*": "allow"},   # WhatsApp, apps, screens...: the owner asked for them to run at once, without a confirmation each time
     }
 
 

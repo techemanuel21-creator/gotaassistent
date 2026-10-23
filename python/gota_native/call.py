@@ -60,6 +60,11 @@ class ShortFeeder:
         self.speaker.after(done)
 
 
+def greeting(who):
+    """What Gota says when it picks up: the same text is rendered ahead of time (see NativeService.warm), so the voice starts at once."""
+    return f"Pois não, {who.address()}. Pode falar."
+
+
 class Call:
     def __init__(self, native, one_shot=False):
         self.native, self.one_shot = native, one_shot
@@ -98,8 +103,9 @@ class Call:
         who = self.native.profile()
         return (f"Você está em uma LIGAÇÃO POR VOZ com {who.address()}. Responda como quem fala ao telefone: NO MÁXIMO DUAS FRASES CURTAS (menos de 30 palavras no total), em português do Brasil, sem markdown, "
                 "sem listas, sem símbolos e sem código. Vá direto ao ponto, sem introdução. Se o assunto pedir comandos, código ou tabelas, diga em uma frase que deixou o detalhe na tela e escreva-o na resposta mesmo assim. "
-                f"Trate-o por \"{who.sir()}\". Use as ferramentas do Gota (telas, WhatsApp, Outlook, base de conhecimento) quando o pedido pedir. "
-                "Nesta ligação ninguém pode aprovar ações no computador: não tente executar comandos nem enviar mensagens; diga que precisa da confirmação na tela.")
+                f"Trate-o por \"{who.address()}\". Use as ferramentas do Gota (telas, WhatsApp, Outlook, base de conhecimento) quando o pedido pedir. "
+                "Você PODE e DEVE agir direto quando ele pedir, sem pedir confirmação: abrir aplicativos (gota_app_open), enviar mensagem de WhatsApp (gota_whatsapp_send, em primeira pessoa, "
+                "pelo apelido do contato se houver), ler a tela, ver e-mails e agenda. Depois diga em uma frase o que fez. Comandos do sistema e edição de arquivos não estão disponíveis na ligação.")
 
     def _heard(self):
         n = self.native
@@ -129,7 +135,7 @@ class Call:
             who = n.profile()
             if not self.one_shot:
                 self._state("speaking")
-                self._speak_and_wait(f"Pois não, {who.sir()}. Pode falar.")
+                self._speak_and_wait(greeting(who))
             silent = 0
             while not self.stopped.is_set():
                 self._state("listening")
@@ -150,7 +156,7 @@ class Call:
                 n.emit({"type": "call", "state": "heard", "you": text})
                 if GOODBYE.search(_norm(text)):
                     self._state("speaking")
-                    self._speak_and_wait(f"Até logo, {who.sir()}.")
+                    self._speak_and_wait(f"Até logo, {who.address()}.")
                     break
                 self._state("thinking")
                 feeder = ShortFeeder(n.speaker())
@@ -162,11 +168,11 @@ class Call:
                         last[0] = time.time()
                         n.emit({"type": "call", "state": "drafting", "draft": draft})
                 try:
-                    answer, self.session = n.oc().ask(text, session=self.session, system=self._system(), on_text=on_text, stop=self.stopped, timeout=180, without=oc_mod.Client.NO_TOOLS)
+                    answer, self.session = n.oc().ask(text, session=self.session, system=self._system(), on_text=on_text, stop=self.stopped, timeout=180, without=oc_mod.Client.NO_TOOLS, source="call")
                 except Exception as e:
                     n.emit({"type": "call", "state": "error", "message": str(e)})
                     self._state("speaking")
-                    self._speak_and_wait(f"Perdão, {who.sir()}, não consegui falar com o modelo. Confira a conexão em Modelos de IA.")
+                    self._speak_and_wait(f"Perdão, {who.address()}, não consegui falar com o modelo. Confira a conexão em Modelos de IA.")
                     if self.one_shot:
                         break
                     continue

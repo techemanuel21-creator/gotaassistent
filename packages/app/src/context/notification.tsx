@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import type { ServerSDK } from "./server-sdk"
 import type { ServerSync } from "./server-sync"
+import { isAutomatedSession } from "@/gota/native"
 import { usePlatform } from "@/context/platform"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
@@ -337,10 +338,11 @@ function createServerNotificationState(input: {
 
   const handleSessionIdle = (directory: string, event: { properties: { sessionID?: string } }, time: number) => {
     const sessionID = event.properties.sessionID
-    void lookup(directory, sessionID).then((session) => {
+    void lookup(directory, sessionID).then(async (session) => {
       if (meta.disposed) return
       if (!session) return
       if (session.parentID) return
+      if (await isAutomatedSession(sessionID)) return // a voice call or a routine: no "response ready" notice for it
 
       if (settings.sounds.agentEnabled()) {
         void playSoundById(settings.sounds.agent())
@@ -369,9 +371,10 @@ function createServerNotificationState(input: {
     time: number,
   ) => {
     const sessionID = event.properties.sessionID
-    void lookup(directory, sessionID).then((session) => {
+    void lookup(directory, sessionID).then(async (session) => {
       if (meta.disposed) return
       if (session?.parentID) return
+      if (await isAutomatedSession(sessionID)) return
 
       if (settings.sounds.errorsEnabled()) {
         void playSoundById(settings.sounds.errors())

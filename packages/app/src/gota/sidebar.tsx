@@ -10,8 +10,8 @@ import { createHomeProjectsController } from "@/pages/home/home-projects-control
 import { createHomeSessionsController } from "@/pages/home/home-sessions-controller"
 import { DialogConnectProvider, useProviderConnectController } from "@/components/dialog-connect-provider"
 import { GIcon, type GotaIconName } from "./icons"
-import { openCall, openConnections, openProfile, openQuick, openRoutines, openScreens } from "./panels"
-import { connectEngine, native, openPopup } from "./native"
+import { openCall, openCalls, openConnections, openNicks, openProfile, openQuick, openRoutines, openScreens } from "./panels"
+import { automatedSessions, connectEngine, native, openPopup, refreshAutomated } from "./native"
 import { openSessionMenu, SessionMenu, type SessionMenuState } from "./session-menu"
 
 const COLLAPSE_KEY = "gota.sidebar.collapsed"
@@ -72,6 +72,7 @@ export function GotaSidebar(): JSX.Element {
   const byProject = createMemo(() => {
     const groups = new Map<string, { name: string; worktree: string; items: ReturnType<typeof sessions.data.records> }>()
     for (const record of sessions.data.records()) {
+      if (automatedSessions()[record.session.id]) continue // calls and routines are not chats: they have their own button
       const key = record.project.worktree
       const group = groups.get(key) ?? { name: record.projectName, worktree: key, items: [] }
       group.items.push(record)
@@ -84,15 +85,27 @@ export function GotaSidebar(): JSX.Element {
   const conn = () => home.server.focused()
 
   // the engine's "session created/renamed" events do not always reach the list: fetch it again when the conversation changes and every few seconds (it is local and small)
-  const refreshList = () => void queryClient.refetchQueries({ queryKey: home.server.focusedSync().homeSessions.indexKey, exact: true, type: "active" })
+  const refreshList = () => {
+    void refreshAutomated()
+    void queryClient.refetchQueries({ queryKey: home.server.focusedSync().homeSessions.indexKey, exact: true, type: "active" })
+  }
+  void refreshAutomated()
   createEffect(on(() => location.pathname, refreshList, { defer: true }))
   const timer = setInterval(refreshList, 5000)
   onCleanup(() => clearInterval(timer))
 
   // first run: ask who the owner is (the persona greets "senhor <name>")
-  void native<{ profile: { name: string } }>("/state").then((state) => {
-    if (!state.profile.name) openProfile(dialog)
-  }, () => undefined)
+  // (the native service can still be starting: try again for a while instead of giving up)
+  const askName = (attempt = 0) =>
+    void native<{ profile: { name: string } }>("/state").then(
+      (state) => {
+        if (!state.profile.name) openProfile(dialog)
+      },
+      () => {
+        if (attempt < 40) setTimeout(() => askName(attempt + 1), 1500)
+      },
+    )
+  askName()
 
   // the native service (call, routines) talks to the same engine as this window
   createEffect(() => {
@@ -137,7 +150,23 @@ export function GotaSidebar(): JSX.Element {
           <NavItem icon="mic" label={t("gota.nav.quick")} hint="Ctrl+Alt+G" onClick={() => openPopup("quick") || openQuick(dialog)} accent />
           <NavItem icon="screen" label={t("gota.nav.screens")} onClick={() => openScreens(dialog)} />
           <NavItem icon="link" label={t("gota.nav.connections")} onClick={() => openConnections(dialog)} />
+          <NavItem
+            icon="history"
+            label={t("gota.nav.calls")}
+            onClick={() => {
+              const records = sessions.data.searchRecords()
+              const calls = records
+                .filter((record) => automatedSessions()[record.session.id] === "call")
+                .map((record) => ({ id: record.session.id, title: record.session.title, time: record.session.time.updated ?? record.session.time.created }))
+                .sort((a, b) => b.time - a.time)
+              openCalls(dialog, calls, (id) => {
+                const record = records.find((item) => item.session.id === id)
+                if (record) sessions.session.open(record.session)
+              })
+            }}
+          />
           <NavItem icon="clock" label={t("gota.nav.routines")} onClick={() => openRoutines(dialog)} />
+          <NavItem icon="tag" label={t("gota.nav.nicks")} onClick={() => openNicks(dialog)} />
           <NavItem
             icon="sparkle"
             label={t("gota.nav.models")}

@@ -159,6 +159,7 @@ class Speaker:
         self.male = False
         self.ready = threading.Event()
         self.generation = 0
+        self.cache = {}   # phrase -> audio rendered ahead of time (the greeting)
         threading.Thread(target=self._run, daemon=True).start()
 
     def _load_piper(self):
@@ -251,7 +252,7 @@ class Speaker:
 
     def _run(self):
         import numpy as np, sounddevice as sd
-        piper = self._load_piper()
+        piper = self._piper = self._load_piper()
         sapi = None if piper else self._load_sapi()
         self.male = piper is not None
         self.en_voice = None
@@ -281,7 +282,9 @@ class Speaker:
                 self.rendering += 1
                 try:
                     if gen == self.generation and text:
-                        audio = self._render(piper, text, np)
+                        audio = self.cache.get(text)
+                        if audio is None:
+                            audio = self._render(piper, text, np)
                 except Exception:
                     audio = None
                 finally:
@@ -326,12 +329,27 @@ class Speaker:
                     except Exception:
                         pass
 
-    def speak(self, text, done=None):
+    @staticmethod
+    def _clean(text):
         import re
         clean = re.sub(r"```.*?(```|\Z)", " (o comando está no chat) ", text, flags=re.S)   # code is never read aloud
         clean = spoken_form(clean)   # JOB_BACKUP_TAPE_NOD01_B -> "job, backup, tape, nod zero um, bê" (before the underscores are dropped below)
         clean = re.sub(r"[*_#`>]", "", clean)
-        clean = re.sub(r"[𐀀-􏿿☀-➿]", "", clean).strip()
+        return re.sub(r"[𐀀-􏿿☀-➿]", "", clean).strip()
+
+    def prerender(self, text):
+        """Renders a phrase that will be spoken again and again (the greeting) ahead of time, so speaking it needs no synthesis. Blocking."""
+        import numpy as np
+        if not self.ready.wait(120) or getattr(self, "_piper", None) is None:
+            return
+        clean = self._clean(text)
+        if clean and clean not in self.cache:
+            self.cache[clean] = self._render(self._piper, clean, np)
+            if len(self.cache) > 12:
+                del self.cache[next(iter(self.cache))]
+
+    def speak(self, text, done=None):
+        clean = self._clean(text)
         if not clean:
             if done:
                 done()

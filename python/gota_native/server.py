@@ -51,10 +51,22 @@ class Native:
     def profile(self):
         return store.Profile()
 
+    def warm(self, delay=4):
+        """Loads the voice (Piper), the recognizers (Vosk, Whisper) and renders the greeting in the background, a few seconds after the service starts:
+        by the time Ctrl+Alt+L is pressed there is nothing left to load, so the call starts and speaks at once."""
+        try:
+            time.sleep(delay)
+            from gota_native.call import greeting
+            self.speaker().prerender(greeting(self.profile()))
+            self.listener.preload()
+        except Exception:
+            pass
+
     def save_profile(self, name, treatment):
         """Stores the owner's name and form of address and rebuilds the persona the agent reads (config/build_config.py)."""
         import importlib.util
         store.Profile().set_name(name or "Dono", treatment if treatment in ("senhor", "senhora", "") else "senhor")
+        threading.Thread(target=self.warm, args=(0,), daemon=True).start()   # the greeting now carries the new name
         spec = importlib.util.spec_from_file_location("gota_build_config", HERE.parent.parent / "config" / "build_config.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -278,7 +290,7 @@ class Native:
     # ------------------------------------------------------------------ everything at a glance
     def state(self):
         out = {"call": self.call.state if self.call else "idle", "wake": bool(self.wake_stop and not self.wake_stop.is_set()), "hey_gota": bool(self.settings.get("hey_gota")),
-               "connection": bool(self.connection), "profile": {"name": self.profile().name, "sir": self.profile().sir()}}
+               "connection": bool(self.connection), "profile": {"name": self.profile().name, "sir": self.profile().sir()}, "automated": {sid: info["kind"] for sid, info in oc_mod.AUTOMATED.items()}}
         for key, fn in (("whatsapp", self.whatsapp_status), ("outlook", self.outlook_status)):
             try:
                 out[key] = fn()
@@ -332,6 +344,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if path == "/state":
                 return self._send(200, n.state())
+            if path == "/automated":   # the conversations the service runs by itself (calls, routines), light enough to ask every few seconds
+                return self._send(200, {sid: info["kind"] for sid, info in oc_mod.AUTOMATED.items()})
             if path == "/events":
                 return self._events()
             if path == "/connect" and method == "POST":
@@ -400,6 +414,20 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/outlook/disconnect" and method == "POST":
                 n.outlook_disconnect()
                 return self._send(200, n.outlook_status())
+            # --- nicknames: for apps ("navegador" = Chrome) and for WhatsApp contacts ("chefe" = Carlos Souza)
+            if path == "/nicks":
+                s = n.settings
+                if method == "POST":
+                    key = "aliases" if body.get("kind") == "app" else "wa_nicks"
+                    table = dict(s.get(key) or {})
+                    nick, target = str(body.get("nick", "")).strip(), str(body.get("target", "")).strip()
+                    if body.get("remove"):
+                        table.pop(nick, None)
+                    elif nick and target:
+                        table[nick] = target
+                    s.set(key, table)
+                from gota import tools
+                return self._send(200, {"apps": s.get("aliases") or {}, "contacts": s.get("wa_nicks") or {}, "installed": [name for name, _ in tools.installed_apps()]})
             # --- routines and tasks
             if path == "/routines":
                 if method == "POST":
@@ -465,6 +493,7 @@ def main():
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     httpd.daemon_threads = True
     print(f"READY {httpd.server_address[1]}", flush=True)
+    threading.Thread(target=NATIVE.warm, daemon=True).start()   # load the voice models now, not when the call starts
     httpd.serve_forever()
 
 

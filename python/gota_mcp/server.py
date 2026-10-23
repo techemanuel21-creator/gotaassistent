@@ -60,8 +60,41 @@ def whatsapp_unread():
         return "O WhatsApp não está conectado: abra o Gota e conecte pelo QR code em Conexões."
 
 
+def _nick(table, spoken):
+    """The real name behind a nickname the owner gave ("chefe" -> "Carlos Souza"), or None."""
+    from gota import tools
+    s = tools.norm(spoken)
+    return next((real for nick, real in (table or {}).items() if tools.norm(nick) == s), None)
+
+
+def app_open(name):
+    from gota import tools
+    found = tools.find_app(name, _settings().get("aliases") or {})
+    if not found:
+        return f"Não encontrei o aplicativo \"{name}\"."
+    tools.launch(found[1])
+    return f"Abri {found[0]}."
+
+
+def app_nickname(nickname, app):
+    from gota import tools
+    found = tools.find_app(app, {})
+    if not found:
+        return f"Não encontrei o aplicativo \"{app}\"."
+    s = _settings()
+    s.set("aliases", {**(s.get("aliases") or {}), nickname.strip(): found[0]})
+    return f"Pronto: \"{nickname}\" agora abre {found[0]}."
+
+
+def whatsapp_nickname(nickname, contact):
+    s = _settings()
+    s.set("wa_nicks", {**(s.get("wa_nicks") or {}), nickname.strip(): contact.strip()})
+    return f"Pronto: \"{nickname}\" agora é {contact} no WhatsApp."
+
+
 def whatsapp_send(contact, message="", screenshot=False):
     from gota import whatsapp, tools
+    contact = _nick(_settings().get("wa_nicks"), contact) or contact   # a nickname means the contact he gave it to
     wa = whatsapp.WhatsApp(_settings())
     image = None
     if screenshot:
@@ -155,6 +188,9 @@ TOOLS = {
     "whatsapp_unread": (whatsapp_unread, "Conversas não lidas do WhatsApp (quem e quantas).", {}, []),
     "whatsapp_send": (whatsapp_send, "Envia mensagem e/ou print da tela a um contato do WhatsApp, na voz do dono (1ª pessoa).",
                       {"contact": STR, "message": STR, "screenshot": {"type": "boolean"}}, ["contact"]),
+    "whatsapp_nickname": (whatsapp_nickname, "Dá um apelido a um contato do WhatsApp (ex.: \"chefe\"); depois ele pode ser chamado por esse apelido.", {"nickname": STR, "contact": STR}, ["nickname", "contact"]),
+    "app_open": (app_open, "Abre um aplicativo do computador pelo nome ou apelido, na hora e sem pedir confirmação.", {"name": STR}, ["name"]),
+    "app_nickname": (app_nickname, "Dá um apelido a um aplicativo (ex.: \"navegador\" = Chrome).", {"nickname": STR, "app": STR}, ["nickname", "app"]),
     "outlook_agenda": (outlook_agenda, "Compromissos do Outlook dos próximos N dias.", {"days": {"type": "integer"}}, []),
     "outlook_emails": (outlook_emails, "E-mails do Outlook (importantes, pendentes, não lidos).", {"unread_only": {"type": "boolean"}, "days": {"type": "integer"}}, []),
     "kb_search": (kb_search, "Base de conhecimento e habilidades do Gota (TI, segurança, Veeam, redes/Cisco, Windows, Linux, virtualização). Use antes de perguntas técnicas.", {"query": STR}, ["query"]),
@@ -194,6 +230,14 @@ def handle(msg):
 
 
 def main():
+    def warm():   # the list of installed apps takes a few seconds the first time: have it ready before "abra o ..." is asked
+        try:
+            from gota import tools
+            tools.installed_apps()
+        except Exception:
+            pass
+    import threading
+    threading.Thread(target=warm, daemon=True).start()
     for line in sys.stdin:
         line = line.strip()
         if not line:

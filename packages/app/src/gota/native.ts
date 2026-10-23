@@ -41,6 +41,24 @@ export async function native<T = unknown>(path: string, body?: unknown, method?:
   return (await response.json()) as T
 }
 
+// The conversations the voice call ("call") and the routines ("task") run through the engine: {session id: kind}. They are kept out of the list of chats
+// (calls have their own "Chamadas" button) and the window stays quiet about them.
+const [automated, setAutomated] = createSignal<Record<string, string>>({})
+export const automatedSessions = automated
+
+export async function refreshAutomated() {
+  try {
+    setAutomated(await native<Record<string, string>>("/automated"))
+  } catch {}
+}
+
+export async function isAutomatedSession(sessionID: string | undefined) {
+  if (!sessionID) return false
+  if (automated()[sessionID]) return true
+  await refreshAutomated()
+  return !!automated()[sessionID]
+}
+
 export async function nativeImageUrl(path: string) {
   const info = await nativeInfo()
   return info ? `${info.url}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(info.token)}` : undefined

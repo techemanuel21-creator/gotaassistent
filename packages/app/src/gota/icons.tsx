@@ -20,6 +20,8 @@ const paths = {
   check: "M5 12l5 5 9-10",
   trash: "M5 7h14M10 11v6M14 11v6M7 7l1 12h8l1-12M9 7V4h6v3",
   play: "M8 5v14l11-7z",
+  tag: "M3 12l9-9h8v8l-9 9-8-8zM15.5 8.5h.01",
+  history: "M4 12a8 8 0 1 0 2.3-5.6L4 8.5M4 4v4.5h4.5M12 8v4l3 2",
 } as const
 
 export type GotaIconName = keyof typeof paths

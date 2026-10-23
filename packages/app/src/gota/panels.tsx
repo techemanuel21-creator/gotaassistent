@@ -14,6 +14,8 @@ export const openConnections = (dialog: DialogApi) => dialog.show(() => <Connect
 export const openProfile = (dialog: DialogApi) => dialog.show(() => <ProfilePanel />)
 export const openQuick = (dialog: DialogApi) => dialog.show(() => <CallPanel quick />)
 export const openRoutines = (dialog: DialogApi) => dialog.show(() => <RoutinesPanel />)
+export const openNicks = (dialog: DialogApi) => dialog.show(() => <NicksPanel />)
+export const openCalls = (dialog: DialogApi, calls: CallEntry[], open: (id: string) => void) => dialog.show(() => <CallsPanel calls={calls} open={open} />)
 
 const card = "rounded-xl border border-v2-border-border-muted bg-v2-background-bg-layer-01 p-4"
 const button =
@@ -21,6 +23,102 @@ const button =
 const primary = "rounded-lg bg-v2-background-bg-accent px-3 py-1.5 text-[13px] text-white hover:opacity-90 disabled:opacity-50"
 const field =
   "w-full rounded-lg border border-v2-border-border-muted bg-v2-background-bg-layer-02 px-3 py-2 text-[13px] text-v2-text-text-base outline-none focus:border-v2-border-border-focus"
+
+export type CallEntry = { id: string; title: string; time: number }
+
+function CallsPanel(props: { calls: CallEntry[]; open: (id: string) => void }) {
+  const t = useLanguage().t
+  const dialog = useDialog()
+  return (
+    <Dialog title={t("gota.calls.title")} size="large">
+      <div class="flex max-h-[60vh] flex-col gap-1 overflow-y-auto p-4">
+        <p class="pb-2 text-[13px] text-v2-text-text-muted">{t("gota.calls.hint")}</p>
+        <For each={props.calls} fallback={<p class="text-[13px] text-v2-text-text-faint">{t("gota.calls.empty")}</p>}>
+          {(call) => (
+            <button
+              type="button"
+              class="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-[14px] text-v2-text-text-base hover:bg-v2-background-bg-layer-02"
+              onClick={() => {
+                dialog.close()
+                props.open(call.id)
+              }}
+            >
+              <GIcon name="phone" size={15} class="shrink-0 text-v2-text-text-muted" />
+              <span class="min-w-0 flex-1 truncate">{call.title}</span>
+              <span class="shrink-0 text-[11px] text-v2-text-text-faint">{new Date(call.time).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+            </button>
+          )}
+        </For>
+      </div>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------- nicknames for apps and WhatsApp contacts
+type Nicks = { apps: Record<string, string>; contacts: Record<string, string>; installed: string[] }
+
+function NicksPanel() {
+  const t = useLanguage().t
+  const [nicks, setNicks] = createSignal<Nicks>()
+  const [form, setForm] = createSignal({ app: { nick: "", target: "" }, contact: { nick: "", target: "" } })
+  const load = (body?: unknown) => native<Nicks>("/nicks", body).then(setNicks, () => setNicks(undefined))
+  void load()
+
+  const add = (kind: "app" | "contact") => {
+    const entry = form()[kind]
+    if (!entry.nick.trim() || !entry.target.trim()) return
+    void load({ kind, nick: entry.nick, target: entry.target })
+    setForm({ ...form(), [kind]: { nick: "", target: "" } })
+  }
+  const remove = (kind: "app" | "contact", nick: string) => void load({ kind, nick, remove: true })
+
+  const section = (kind: "app" | "contact") => (
+    <div class={card + " flex flex-col gap-2"}>
+      <p class="text-[13px] font-medium text-v2-text-text-base">{t(kind === "app" ? "gota.nicks.apps" : "gota.nicks.contacts")}</p>
+      <For each={Object.entries((kind === "app" ? nicks()?.apps : nicks()?.contacts) ?? {})} fallback={<p class="text-[12px] text-v2-text-text-faint">{t("gota.nicks.none")}</p>}>
+        {([nick, target]) => (
+          <div class="flex items-center gap-2 text-[13px] text-v2-text-text-base">
+            <span class="min-w-0 flex-1 truncate">
+              <b>{nick}</b> <span class="text-v2-text-text-muted">→ {target}</span>
+            </span>
+            <button type="button" class={button} aria-label={t("gota.nicks.remove")} onClick={() => remove(kind, nick)}>
+              <GIcon name="trash" size={14} />
+            </button>
+          </div>
+        )}
+      </For>
+      <div class="flex gap-2">
+        <input class={field} placeholder={t("gota.nicks.nick")} value={form()[kind].nick} onInput={(event) => setForm({ ...form(), [kind]: { ...form()[kind], nick: event.currentTarget.value } })} />
+        <input
+          class={field}
+          list={kind === "app" ? "gota-installed-apps" : undefined}
+          placeholder={t(kind === "app" ? "gota.nicks.app" : "gota.nicks.contact")}
+          value={form()[kind].target}
+          onInput={(event) => setForm({ ...form(), [kind]: { ...form()[kind], target: event.currentTarget.value } })}
+          onKeyDown={(event) => event.key === "Enter" && add(kind)}
+        />
+        <button type="button" class={primary + " shrink-0"} onClick={() => add(kind)}>
+          {t("gota.nicks.add")}
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <Dialog title={t("gota.nicks.title")} size="x-large">
+      <div class="flex max-h-[70vh] flex-col gap-3 overflow-y-auto p-4">
+        <Show when={nicks()} fallback={<Unavailable />}>
+          <p class="text-[13px] text-v2-text-text-muted">{t("gota.nicks.hint")}</p>
+          <datalist id="gota-installed-apps">
+            <For each={nicks()?.installed ?? []}>{(name) => <option value={name} />}</For>
+          </datalist>
+          {section("app")}
+          {section("contact")}
+        </Show>
+      </div>
+    </Dialog>
+  )
+}
 
 function Unavailable() {
   const language = useLanguage()

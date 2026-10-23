@@ -50,7 +50,7 @@ class Profile:
 
     def address(self):
         t = self.treatment
-        return self.name if not t else f"{t} {self.name}"
+        return (self.name if not t else f"{t} {self.name}").strip()
 
     def sir(self):
         return self.treatment or self.name or "senhor"

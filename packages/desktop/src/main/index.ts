@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdirSync, rmSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs"
 import * as http from "node:http"
 import { createServer } from "node:net"
 import { homedir, tmpdir } from "node:os"
@@ -16,9 +16,9 @@ import { checkAppExists, resolveAppPath } from "./apps"
 import { CHANNEL, FROM_SOURCE } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 import { forwardInitializationFailure } from "./initialization"
-import { prepareGotaConfig, registerGotaShortcuts, startGotaNative, stopGotaNative } from "./gota-native"
+import { portableDataDir, prepareGotaConfig, registerGotaShortcuts, startGotaNative, stopGotaNative } from "./gota-native"
 import { createGotaTray, markQuitting } from "./gota-tray"
-import { registerGotaOverlayIpc, showGotaOverlay } from "./gota-overlay"
+import { prepareGotaOverlay, registerGotaOverlayIpc, showGotaOverlay } from "./gota-overlay"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
 import { createMenu } from "./menu"
 import {
@@ -145,9 +145,35 @@ const main = Effect.gen(function* () {
   })()
   app.setName(APP_NAMES[CHANNEL] ?? "GotaAssistent")
   app.setAppUserModelId("com.gotaassistent.desktop") // the name Windows shows for notifications and the taskbar (the data folder keeps its old id)
+  const portable = onboardingTestRoot ? undefined : portableDataDir()
+  // What belongs to the user (the API key, the chats, the window settings) lives in %APPDATA%\Gota, so it survives a new copy of the program;
+  // caches and crash dumps stay in the program folder (see portableDataDir).
+  const gotaHome = process.env.GOTA_HOME ?? join(app.getPath("appData"), "Gota")
+  if (portable) {
+    // a previous portable copy kept these inside its own folder: bring them along once
+    for (const part of ["electron", "engine"]) {
+      const old = join(portable, part)
+      const now = join(gotaHome, part)
+      if (existsSync(old) && !existsSync(now)) cpSync(old, now, { recursive: true })
+    }
+    for (const dir of ["crash", "engine/cache", "hf"]) mkdirSync(join(portable, dir), { recursive: true })
+    for (const dir of ["electron", "engine/data", "engine/config", "engine/state"]) mkdirSync(join(gotaHome, dir), { recursive: true })
+    Object.assign(process.env, {
+      XDG_DATA_HOME: join(gotaHome, "engine", "data"),
+      XDG_CONFIG_HOME: join(gotaHome, "engine", "config"),
+      XDG_STATE_HOME: join(gotaHome, "engine", "state"),
+      XDG_CACHE_HOME: join(portable, "engine", "cache"),
+      HF_HOME: join(portable, "hf"),
+    })
+    app.setPath("crashDumps", join(portable, "crash"))
+  }
   app.setPath(
     "userData",
-    onboardingTestRoot ? join(onboardingTestRoot, "desktop") : join(app.getPath("appData"), appId),
+    onboardingTestRoot
+      ? join(onboardingTestRoot, "desktop")
+      : portable
+        ? join(gotaHome, "electron")
+        : join(app.getPath("appData"), appId),
   )
   if (onboardingTestRoot) app.setPath("sessionData", join(onboardingTestRoot, "session"))
   initializeOldLayoutEligibility(app.getPath("userData"))
@@ -231,6 +257,7 @@ const main = Effect.gen(function* () {
   registerGotaOverlayIpc()
   void app.whenReady().then(() => {
     registerGotaShortcuts((action) => void showGotaOverlay(action))
+    void prepareGotaOverlay()
     createGotaTray(trayIconPath(), {
       open: showMainWindow,
       call: () => void showGotaOverlay("call"),

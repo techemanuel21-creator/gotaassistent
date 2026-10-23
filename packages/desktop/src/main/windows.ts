@@ -77,10 +77,13 @@ export function setAppQuitting(quitting = true) {
 
 export function setBackgroundColor(color: string) {
   backgroundColor = color
-  BrowserWindow.getAllWindows().forEach((win) => {
-    win.setBackgroundColor(color)
-    if (process.platform === "darwin") win.invalidateShadow()
-  })
+  // main windows only: the popup of the shortcuts must stay transparent (a theme color on it is the "blue square")
+  BrowserWindow.getAllWindows()
+    .filter((win) => windowIDs.has(win))
+    .forEach((win) => {
+      win.setBackgroundColor(color)
+      if (process.platform === "darwin") win.invalidateShadow()
+    })
 }
 
 export function getBackgroundColor(): string | undefined {

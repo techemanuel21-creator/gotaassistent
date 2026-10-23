@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { app, globalShortcut } from "electron"
+import { FROM_SOURCE } from "./constants"
 
 // The native Gota service (python/gota_native): voice call, microphone, screens, WhatsApp, Outlook, routines. It runs next to the app, only on this computer,
 // behind a secret token that only this window receives.
@@ -13,6 +14,13 @@ let starting: Promise<GotaNativeInfo | null> | undefined
 
 function projectRoot() {
   return process.env.GOTA_ROOT ?? join(app.getAppPath(), "..", "..")
+}
+
+/** The installed program keeps its caches and crash dumps in a `data` folder next to GotaAssistent.exe. What belongs to the user (API key, chats, window settings,
+ * profile, memory) lives in %APPDATA%\Gota. From the source tree everything stays where it always was. */
+export function portableDataDir() {
+  if (FROM_SOURCE && !process.env.GOTA_PORTABLE) return undefined
+  return process.env.GOTA_DATA ?? join(projectRoot(), "data")
 }
 
 function pythonPath(root: string) {

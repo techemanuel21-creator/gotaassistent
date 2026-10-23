@@ -7,6 +7,33 @@ class OpenCodeError(Exception):
     pass
 
 
+def _automated_file():
+    from gota import store
+    return store.ROOT / "automated.json"
+
+
+def _load_automated():
+    try:
+        return json.loads(_automated_file().read_text("utf-8"))
+    except Exception:
+        return {}
+
+
+# sessions this service runs by itself: {id: {"kind": "call" | "task", "time": seconds}}. The window keeps voice calls out of the list of chats (they have their own
+# "Chamadas" button), and announces none of them with notifications. Saved, so the calls are still there after a restart.
+AUTOMATED = _load_automated()
+
+
+def _remember(sid, kind):
+    if sid in AUTOMATED:
+        return
+    AUTOMATED[sid] = {"kind": kind, "time": time.time()}
+    try:
+        _automated_file().write_text(json.dumps(AUTOMATED, ensure_ascii=False), "utf-8")
+    except Exception:
+        pass
+
+
 class Client:
     def __init__(self, url, username="opencode", password="", directory=None):
         self.url, self.directory = url.rstrip("/"), directory
@@ -44,9 +71,10 @@ class Client:
     CODING_TOOLS = ["bash", "edit", "write", "patch", "apply_patch", "task", "todowrite", "todoread", "question", "skill", "lsp", "webfetch", "websearch", "list"]
     NO_TOOLS = CODING_TOOLS + ["read", "glob", "grep"]
 
-    def ask(self, text, session=None, system=None, on_text=None, timeout=300, stop=None, without=None):
+    def ask(self, text, session=None, system=None, on_text=None, timeout=300, stop=None, without=None, source="task"):
         """Returns (answer, session id). on_text(answer so far) is called as the answer is written; `stop` is a threading.Event that cancels the request."""
         sid = session or self.session()
+        _remember(sid, source)
         events, stop = queue.Queue(), stop or threading.Event()
         sse = self._open("/event", timeout=timeout + 30)
 
@@ -104,7 +132,9 @@ class Client:
                     texts[p["partID"]] += p.get("delta", "")
                     on_text and on_text(joined())
                 elif kind in ("permission.asked", "permission.v2.asked") and p.get("sessionID") == sid:
-                    self.json(f"/permission/{p['id']}/reply", {"reply": "reject"})   # nobody is there to approve it
+                    # the abilities of Gota itself (WhatsApp, apps, screens, ...) run at once, as the owner asked; anything else (commands, files) nobody is there to approve
+                    mine = str(p.get("permission", "")).startswith("gota_")
+                    self.json(f"/permission/{p['id']}/reply", {"reply": "once" if mine else "reject"})
                 elif kind in ("question.asked", "question.v2.asked") and p.get("sessionID") == sid:
                     try:
                         self.json(f"/question/{p['id']}/reject", {})
