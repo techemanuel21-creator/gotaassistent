@@ -90,7 +90,7 @@ export function getBackgroundColor(): string | undefined {
 /** The tray icon (a 32px PNG scales cleanly to the clock area); the first file that exists in the build or the source tree. */
 export function trayIconPath() {
   const names = ["32x32.png", "64x64.png", "icon.png"]
-  const dirs = [iconsDir(), join(root, "../../resources/icons"), join(root, "../../icons/dev"), join(app.getAppPath(), "icons", "dev")]
+  const dirs = [iconsDir(), join(root, "../../resources/icons"), join(root, "../../icons/dev"), join(app.getAppPath(), "resources", "icons")]
   for (const dir of dirs) for (const name of names) if (existsSync(join(dir, name))) return join(dir, name)
   return iconPath()
 }

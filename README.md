@@ -12,6 +12,10 @@ irm https://raw.githubusercontent.com/techemanuel21-creator/gotaassistent/main/i
 
 Ele instala o Bun e o Python 3.12 (só para o seu usuário, via winget, se faltarem), baixa o código, prepara tudo e cria o atalho **GotaAssistent** na área de trabalho. A primeira instalação leva cerca de 15 a 20 minutos (bibliotecas). Precisa de internet e de uns 4 GB livres.
 
+## Instalador MSI offline (sem internet)
+
+`powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1` gera `installer\dist\GotaAssistent-<versão>.msi` (~560 MB) com tudo dentro: o app, o Python 3.12 e suas bibliotecas, o Electron e os modelos de voz (Vosk, Whisper base, Piper). Copie o arquivo para outra máquina e dê dois cliques: instala só para o usuário, sem administrador e sem rede. Só montar o MSI precisa de internet. Antes, abra o Gota uma vez e faça uma ligação para baixar os modelos de voz para `models\`.
+
 ## Atualizar
 
 ```powershell

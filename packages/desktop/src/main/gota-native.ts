@@ -18,6 +18,7 @@ function projectRoot() {
 function pythonPath(root: string) {
   const candidates = [
     process.env.GOTA_PYTHON,
+    join(root, "python", "runtime", "python.exe"), // the installer (MSI) carries its own Python
     join(root, "python", ".venv", "Scripts", "python.exe"),
     join(root, "..", "desktop", ".venv", "Scripts", "python.exe"),
   ]

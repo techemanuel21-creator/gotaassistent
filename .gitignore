@@ -44,3 +44,8 @@ __pycache__/
 
 # copia do Electron com a marca do Gota (gerada por script/brand-electron.ps1)
 packages/desktop/.gota-electron/
+
+# instalador MSI (gerado por installer/build-msi.ps1)
+installer/stage/
+installer/dist/
+installer/cache/

@@ -56,7 +56,8 @@ DENIED = ["rm -rf*", "rm -r *", "rmdir /s*", "rd /s*", "del /s*", "del /f*", "Re
 
 
 def config():
-    python = next((p for p in (ROOT / "python" / ".venv" / "Scripts" / "python.exe", ROOT.parent / "desktop" / ".venv" / "Scripts" / "python.exe") if p.exists()), ROOT / "python" / ".venv" / "Scripts" / "python.exe")
+    candidates = (ROOT / "python" / "runtime" / "python.exe", ROOT / "python" / ".venv" / "Scripts" / "python.exe", ROOT.parent / "desktop" / ".venv" / "Scripts" / "python.exe")
+    python = next((p for p in candidates if p.exists()), candidates[1])
     return {
         "$schema": "https://opencode.ai/config.json",
         "theme": "gota",
